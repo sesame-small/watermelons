@@ -1,8 +1,8 @@
-title: Watermelons Blog
+title: Watermelons
 description: Picking sesame seeds and encountering watermelons.
 theme: just-the-docs
 
 url: https://sesame-small.github.io
 
 aux_links:
-  Repository: https://github.com/sesame-small/watermelons
+  Watermelons: https://github.com/sesame-small/watermelons
