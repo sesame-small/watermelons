@@ -1,10 +1,10 @@
 ---
-title: Вклад в распространение Слова Божия
+title: java
 layout: page
 nav_order: 1
 has_children: true
 has_toc: true
-permalink: contribution
+permalink: java
 ---
 
 # {{ page.title }}

@@ -1,9 +1,10 @@
 ---
-layout: default
-title: Home
-nav_order: 1
-description: "Picking sesame seeds and encountering watermelons."
-permalink: /
+title: Middleware
+layout: page
+nav_order: 5
+has_children: true
+has_toc: true
+permalink: middleware
 ---
 
 Picking sesame seeds and encountering watermelons.
