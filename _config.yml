@@ -11,3 +11,8 @@ aux_links:
 aux_links_new_tab: true
 
 search_enabled: true
+
+# background color
+color_scheme: dark
+
+permalink: /:title/
