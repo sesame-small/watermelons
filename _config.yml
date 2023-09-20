@@ -5,8 +5,8 @@ theme: just-the-docs
 
 url: https://sesame-small.github.io
 
-aux_links:
-  Watermelons: https://github.com/sesame-small/watermelons
+# aux_links:
+#   Watermelons: https://github.com/sesame-small/watermelons
 
 aux_links_new_tab: true
 
