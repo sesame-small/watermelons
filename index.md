@@ -9,5 +9,6 @@ permalink: /
 > **首页-用于导航到每篇文章。  
 > Blog Homepage for Navigating to Each Article.**
 
-#### 2023-09-20
-+ [Hikaricp源码分析](/Notes/hikariCp.md)
+
+### 2023-09-20
++ [Hikaricp源码分析](/note/hikaricp)
