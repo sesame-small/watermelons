@@ -11,7 +11,7 @@ permalink: /
 > 首页-用于导航到每篇文章。  
 > Blog Homepage for Navigating to Each Article.**
 
-### 2023-09-20
-1. **[{{ "hikaricp" | upcase }}][1]**
+#### 2023-09-20
+1. **[{{ "hikaricp" | upcase }}][1]**  
 [1]: {{ "note/hikaricp" | relative_url }}
 
