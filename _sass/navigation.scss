@@ -175,6 +175,7 @@
   .aux-nav {
     height: 100%;
     overflow-x: auto;
+    display: none;
     @include fs-2;
   
     .aux-nav-list {
