@@ -31,7 +31,7 @@
     @include mq(md) {
       position: absolute;
       width: 100%;
-      max-width: $search-results-width;
+      // max-width: $search-results-width;
       height: 100% !important;
       border-radius: 0;
       box-shadow: none;
