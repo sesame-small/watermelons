@@ -16,6 +16,6 @@ Blog Homepage for Navigating to Each Article.**
 + [结构化并发：Structured Concurrency](/java/structuredConcurrency) (更新待定)
   
 ## 源码分析  
-主要分析一些比较有意思的小而美的框架源码，从中学习它的一些设计及实现逻辑。
+主要分析一些比较有意思的框架源码，从中学习框架的设计及原理。
 + [Hikaricp源码分析](/note/hikaricp) (更新于2023-9-21)  
 
