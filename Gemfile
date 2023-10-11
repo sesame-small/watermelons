@@ -1,5 +1,9 @@
-source 'https://ruby.taobao.org/'
+rm Gemfile.lock
+bundle install
+gem cleanup
+bundle clean
 
+source 'https://ruby.taobao.org/'
 
 gem "jekyll", "~> 4.3.2" # installed by `gem jekyll`
 # gem "webrick"        # required when using Ruby >= 3 and Jekyll <= 4.2.2
