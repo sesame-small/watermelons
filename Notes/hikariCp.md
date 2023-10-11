@@ -12,8 +12,19 @@ permalink: note/hikaricp
 > 一个简单、轻量（130kb）、稳定、高性能的JDBC数据库链接池，SpringBoot2.0开始作为Spring应用的默认数据库链接池。      
 
 ---
-本文以开发者视角从代码层面分析及学习HikariCp的设计思路及技术应用，深入了解一下"光"背后的秘密。
+本文以开发者视角从代码层面分析及学习HikariCp的设计思路及技术应用，深入了解一下"光"背后的秘密。   
 
+```mermaid
+sequenceDiagram
+   HikariDataSource ->> HikariPool: getConnection
+   HikariPool ->> ConcurrentBag: borrow
+   ConcurrentBag ->> HikariPool: poolEntry
+   HikariPool ->> ProxyFactory: createProxyConnection
+   ProxyFactory ->> HikariPool: getProxyConnection
+   HikariPool ->> HikariDataSource: Connection
+```
+
+## HikariDataSource
 
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP)
