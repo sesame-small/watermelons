@@ -6,4 +6,6 @@ gem "jekyll", "~> 4.3.2" # installed by `gem jekyll`
 gem "just-the-docs", "0.6.1" # pinned to the current release
 # gem "just-the-docs"        # always download the latest release
 
-gem 'jekyll-spaceship', '~> 0.10.2' ## add spaceship plugin 
+group :jekyll_plugins do
+    gem 'jekyll-spaceship', '~> 0.6'
+end
