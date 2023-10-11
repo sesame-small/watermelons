@@ -34,3 +34,6 @@ callouts:
     color: red
 
 permalink: /:title/
+
+plugins:
+  - jekyll-spaceship
