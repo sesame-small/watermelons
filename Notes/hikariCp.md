@@ -44,11 +44,11 @@ sequenceDiagram
   init: {
     'theme': 'base',
     'themeVariables': {
-      'primaryColor': '#289952',
+      'primaryColor': '#e35d5d',
       'primaryTextColor': '#fff',
-      'primaryBorderColor': '#289952',
+      'primaryBorderColor': '#e35d5d',
       'lineColor': '#fff',
-      'secondaryColor': '#289952',
+      'secondaryColor': '#e35d5d',
       'tertiaryColor': '#fff'
     }
   }
