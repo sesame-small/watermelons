@@ -20,11 +20,11 @@ permalink: note/hikaricp
   init: {
     'theme': 'base',
     'themeVariables': {
-      'primaryColor': '#BB2528',
+      'primaryColor': '#289952',
       'primaryTextColor': '#fff',
-      'primaryBorderColor': '#7C0000',
-      'lineColor': '#F8B229',
-      'secondaryColor': '#006100',
+      'primaryBorderColor': '#289952',
+      'lineColor': '#289952',
+      'secondaryColor': '#289952',
       'tertiaryColor': '#fff'
     }
   }
