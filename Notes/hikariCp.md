@@ -39,28 +39,54 @@ sequenceDiagram
 ```
 
 ## HikariDataSource
-```mermaid
-%%{
-  init: {
-    'theme': 'base',
-    'themeVariables': {
-      'primaryColor': '#e35d5d',
-      'primaryTextColor': '#fff',
-      'primaryBorderColor': '#e35d5d',
-      'lineColor': '#fff',
-      'secondaryColor': '#e35d5d',
-      'tertiaryColor': '#fff'
-    }
-  }
-}%%
-classDiagram
-  class HikariDataSource
-  HikariDataSource : -AtomicBoolean isShutdown
-  HikariDataSource : -HikariPool fastPathPool
-  HikariDataSource : -HikariPool pool
-  HikariDataSource : +HikariDataSource()
-  HikariDataSource : +HikariDataSource(HikariConfig configuration)
-  HikariDataSource : +getConnection() Connection
+``` java
+public class HikariDataSource extends HikariConfig implements DataSource, Closeable {
+  private final AtomicBoolean isShutdown = new AtomicBoolean();
+  private final HikariPool fastPathPool;
+  private volatile HikariPool pool;
+
+  public HikariDataSource() {
+      super();
+      fastPathPool = null;
+   }
+
+   public HikariDataSource(HikariConfig configuration) {
+      configuration.validate();
+      configuration.copyStateTo(this);
+      pool = fastPathPool = new HikariPool(this);
+      this.seal();
+   }
+
+   @Override
+   public Connection getConnection() throws SQLException {
+      if (isClosed()) {
+         throw new SQLException("HikariDataSource " + this + " has been closed.");
+      }
+      if (fastPathPool != null) {
+         return fastPathPool.getConnection();
+      }
+      HikariPool result = pool;
+      if (result == null) {
+         synchronized (this) {
+            result = pool;
+            if (result == null) {
+               validate();
+               try {
+                  pool = result = new HikariPool(this);
+                  this.seal();
+               } catch (PoolInitializationException pie) {
+                  if (pie.getCause() instanceof SQLException) {
+                     throw (SQLException) pie.getCause();
+                  } else {
+                     throw pie;
+                  }
+               }
+            }
+         }
+      }
+      return result.getConnection();
+   }
+}
 ```
 
 ## HikariPool
