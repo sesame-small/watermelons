@@ -39,6 +39,22 @@ sequenceDiagram
 ```
 
 ## HikariDataSource
+```mermaid
+classDiagram
+  class HikariDataSource
+  HikariDataSource : -AtomicBoolean isShutdown
+  HikariDataSource : -HikariPool fastPathPool
+  HikariDataSource : -HikariPool pool
+  HikariDataSource : +HikariDataSource()
+  HikariDataSource : +HikariDataSource(HikariConfig configuration)
+  HikariDataSource : +getConnection() Connection
+```
+
+## HikariPool
+
+## ConcurrentBag
+
+## ProxyFactory
 
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP)
