@@ -40,6 +40,19 @@ sequenceDiagram
 
 ## HikariDataSource
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#289952',
+      'primaryTextColor': '#fff',
+      'primaryBorderColor': '#289952',
+      'lineColor': '#fff',
+      'secondaryColor': '#289952',
+      'tertiaryColor': '#fff'
+    }
+  }
+}%%
 classDiagram
   class HikariDataSource
   HikariDataSource : -AtomicBoolean isShutdown
