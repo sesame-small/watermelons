@@ -44,8 +44,7 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
   private final AtomicBoolean isShutdown = new AtomicBoolean(); // dataSource的状态，是否已关闭
   private final HikariPool fastPathPool; // final修饰的 HikariPool
   private volatile HikariPool pool; // volatile修饰的HikariPool 由于可见性及重排序的问题，相较于fastPathPool性能会低一些
-  // 如果设置了dataSource参数lazy为true的情况，不会马上构建链接池，在getConnection的时候才会
-  // 去初始化
+  // 如果设置了dataSource参数lazy为true的情况，不会马上构建链接池，在getConnection的时候才会去初始化
   public HikariDataSource() {
       super();
       fastPathPool = null;
@@ -57,13 +56,13 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
       pool = fastPathPool = new HikariPool(this); // 根据HikariConfig构建HikariPool
       this.seal(); // 封存 不再允许修改配置属性
    }
-
    @Override
    public Connection getConnection() throws SQLException {
       if (isClosed()) { // 判断数据源状态
          throw new SQLException("HikariDataSource " + this + " has been closed.");
       }
-      if (fastPathPool != null) { return fastPathPool.getConnection();} // 优先使用fastPathPool获取Connection
+      // 优先使用fastPathPool获取Connection
+      if (fastPathPool != null) { return fastPathPool.getConnection();} 
       // 无参构造当前DataSource时候，涉及到并发获取链接，所以此处使用双重检查来初始化链接池并返回链接
       HikariPool result = pool;
       if (result == null) { synchronized (this) {
