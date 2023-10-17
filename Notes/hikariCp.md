@@ -83,10 +83,54 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
 ```
 
 ## HikariPool
+``` java
+public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBagStateListener {
+   // 构造方法
+   public HikariPool(final HikariConfig config) {
+      // 构建poolBase
+      super(config);
+      // 创建并发包，hikariCp核心功能
+      this.connectionBag = new ConcurrentBag<>(this);
+      // 基于java并发工具类Semaphore实现的锁，用于控制链接池的挂起及恢复（仅在设置了isAllowPoolSuspension参数为true时生效）
+      this.suspendResumeLock = config.isAllowPoolSuspension() ? new SuspendResumeLock() : SuspendResumeLock.FAUX_LOCK;
+      // 初始化调度任务线程执行器HouseKeeping
+      this.houseKeepingExecutorService = initializeHouseKeepingExecutorService();
+      // checkFailFast检查与数据库连通性，如果有问题直接快速失败。
+      checkFailFast();
+      // 设置监控
+      if (config.getMetricsTrackerFactory() != null) {
+         setMetricsTrackerFactory(config.getMetricsTrackerFactory());
+      } else {
+         setMetricRegistry(config.getMetricRegistry());
+      }
+      // 设置健康检查
+      setHealthCheckRegistry(config.getHealthCheckRegistry());
+      handleMBeans(this, true);
+      ThreadFactory threadFactory = config.getThreadFactory();
+      final int maxPoolSize = config.getMaximumPoolSize();
+      LinkedBlockingQueue<Runnable> addConnectionQueue = new LinkedBlockingQueue<>(maxPoolSize);
+      this.addConnectionExecutor = createThreadPoolExecutor(addConnectionQueue, poolName + " connection adder", threadFactory, new CustomDiscardPolicy());
+      this.closeConnectionExecutor = createThreadPoolExecutor(maxPoolSize, poolName + " connection closer", threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
+      this.leakTaskFactory = new ProxyLeakTaskFactory(config.getLeakDetectionThreshold(), houseKeepingExecutorService);
+      this.houseKeeperTask = houseKeepingExecutorService.scheduleWithFixedDelay(new HouseKeeper(), 100L, housekeepingPeriodMs, MILLISECONDS);
+      if (Boolean.getBoolean("com.zaxxer.hikari.blockUntilFilled") && config.getInitializationFailTimeout() > 1) {
+         addConnectionExecutor.setMaximumPoolSize(Math.min(16, Runtime.getRuntime().availableProcessors()));
+         addConnectionExecutor.setCorePoolSize(Math.min(16, Runtime.getRuntime().availableProcessors()));
+         final long startTime = currentTime();
+         while (elapsedMillis(startTime) < config.getInitializationFailTimeout() && getTotalConnections() < config.getMinimumIdle()) {
+            quietlySleep(MILLISECONDS.toMillis(100));
+         }
+         addConnectionExecutor.setCorePoolSize(1);
+         addConnectionExecutor.setMaximumPoolSize(1);
+      }
+   }
+}
+```
 
 ## ConcurrentBag
 
 ## ProxyFactory
 
 ## 参考文档
-+ [github/HikariCp](https://github.com/brettwooldridge/HikariCP)
++ [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
++ 《Java并发编程实战》
