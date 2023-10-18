@@ -83,6 +83,7 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
 ```
 
 ## HikariPool
+Hikari链接池管理器，用于对链接池进行监控，对链接池进行伸缩、关闭等处理
 ``` java
 public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBagStateListener {
    // 构造方法
@@ -121,7 +122,7 @@ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBag
    }
 }
 ```
-### getConnection(connectionTimeout) 获取链接
+### method: getConnection(connectionTimeout) 获取链接
 ```java
 // hardTimeout 超时时间（取配置时间，默认为30秒）
 public Connection getConnection(final long hardTimeout) throws SQLException {
@@ -164,7 +165,28 @@ public Connection getConnection(final long hardTimeout) throws SQLException {
 }
 ```
 ## ConcurrentBag
-
+```java
+public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseabl {    
+   // 构造器 final修饰的listener用于回调链接池管理器添加connection的方法
+   public ConcurrentBag(final IBagStateListener listener) {
+         this.listener = listener;
+         // 是否使用弱引起的ThreadLocal
+         this.weakThreadLocals = useWeakThreadLocals();
+         // 公平的同步队列，不存储数据，一对一进行数据传递
+         this.handoffQueue = new SynchronousQueue<>(true);
+         // 阻塞的请求数
+         this.waiters = new AtomicInteger();
+         // 共享的链接集合，采用CopyOnWriteArrayList实现读的安全无锁操作。
+         this.sharedList = new CopyOnWriteArrayList<>();
+         if (weakThreadLocals) {
+            this.threadList = ThreadLocal.withInitial(() -> new ArrayList<>(16));
+         } else {
+            // 用于线程缓存的集合，优先从ThreadLocal中获取可用链接，从而减少不同线程之间的竞争
+            this.threadList = ThreadLocal.withInitial(() -> new FastList<>(IConcurrentBagEntry.class, 16));
+         }
+   }
+}
+```
 ## ProxyFactory
 
 ## 参考文档
