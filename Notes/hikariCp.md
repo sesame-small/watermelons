@@ -63,7 +63,7 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
       }
       // 优先使用fastPathPool获取Connection
       if (fastPathPool != null) { return fastPathPool.getConnection();} 
-      // 无参构造当前DataSource时候，涉及到并发获取链接，所以此处使用双重检查来初始化链接池并返回链接
+      // 无参构造当前DataSource时候，涉及到并发获取链接，所以此处使用双重检查来初始化链接池管理器并返回链接
       HikariPool result = pool;
       if (result == null) { synchronized (this) {
             result = pool;
@@ -93,7 +93,7 @@ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBag
       this.connectionBag = new ConcurrentBag<>(this);
       // 基于java并发工具类Semaphore实现的锁，用于控制链接池的挂起及恢复（仅在设置了isAllowPoolSuspension参数为true时生效）
       this.suspendResumeLock = config.isAllowPoolSuspension() ? new SuspendResumeLock() : SuspendResumeLock.FAUX_LOCK;
-      // 初始化调度任务线程执行器HouseKeeping
+      // 初始化调度任务线程池HouseKeeping
       this.houseKeepingExecutorService = initializeHouseKeepingExecutorService();
       // checkFailFast检查与数据库连通性，如果有问题直接快速失败。
       checkFailFast();
@@ -105,28 +105,64 @@ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBag
       }
       // 设置健康检查
       setHealthCheckRegistry(config.getHealthCheckRegistry());
+      // 处理config及pool的Mbean注册，用于JMX的监控、管理
       handleMBeans(this, true);
+      // 添加链接的阻塞队列
       ThreadFactory threadFactory = config.getThreadFactory();
       final int maxPoolSize = config.getMaximumPoolSize();
       LinkedBlockingQueue<Runnable> addConnectionQueue = new LinkedBlockingQueue<>(maxPoolSize);
+      // 创建添加/关闭链接的线程池
       this.addConnectionExecutor = createThreadPoolExecutor(addConnectionQueue, poolName + " connection adder", threadFactory, new CustomDiscardPolicy());
       this.closeConnectionExecutor = createThreadPoolExecutor(maxPoolSize, poolName + " connection closer", threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
+      // 创建处理泄漏任务的工厂
       this.leakTaskFactory = new ProxyLeakTaskFactory(config.getLeakDetectionThreshold(), houseKeepingExecutorService);
+      // 创建延迟执行的调度任务，每30秒（默认）执行一次，处理链接池的空闲链接
       this.houseKeeperTask = houseKeepingExecutorService.scheduleWithFixedDelay(new HouseKeeper(), 100L, housekeepingPeriodMs, MILLISECONDS);
-      if (Boolean.getBoolean("com.zaxxer.hikari.blockUntilFilled") && config.getInitializationFailTimeout() > 1) {
-         addConnectionExecutor.setMaximumPoolSize(Math.min(16, Runtime.getRuntime().availableProcessors()));
-         addConnectionExecutor.setCorePoolSize(Math.min(16, Runtime.getRuntime().availableProcessors()));
-         final long startTime = currentTime();
-         while (elapsedMillis(startTime) < config.getInitializationFailTimeout() && getTotalConnections() < config.getMinimumIdle()) {
-            quietlySleep(MILLISECONDS.toMillis(100));
-         }
-         addConnectionExecutor.setCorePoolSize(1);
-         addConnectionExecutor.setMaximumPoolSize(1);
-      }
    }
 }
 ```
-
+### getConnection(connectionTimeout) 获取链接
+```java
+// hardTimeout 超时时间（取配置时间，默认为30秒）
+public Connection getConnection(final long hardTimeout) throws SQLException {
+   // 信号量锁，允许链接池挂起时才使用，正常情况未执行
+   suspendResumeLock.acquire();
+   final long startTime = currentTime();
+   try {
+      long timeout = hardTimeout;
+      do {
+         // 从并发包中借出一个PoolEntry（Connection的包装类）,connectionBag类细讲
+         PoolEntry poolEntry = connectionBag.borrow(timeout, MILLISECONDS);
+         if (poolEntry == null) {
+            break; // We timed out... break and throw exception
+         }
+         final long now = currentTime();
+         // 如果当前链接是被标记为驱逐的 或者 当前entry的空窗期大于500ms（默认500ms）并且当前链接是非存活状态
+         if (poolEntry.isMarkedEvicted() || (elapsedMillis(poolEntry.lastAccessed, now) > aliveBypassWindowMs && !isConnectionAlive(poolEntry.connection))) {
+            // 关闭当前链接
+            closeConnection(poolEntry, poolEntry.isMarkedEvicted() ? EVICTED_CONNECTION_MESSAGE : DEAD_CONNECTION_MESSAGE);
+            // 计算剩余超时时间， 大于0的话继续循环获取链接直到超时未取出则抛出超时异常
+            timeout = hardTimeout - elapsedMillis(startTime);
+         } else {
+            // 记录借出状态
+            metricsTracker.recordBorrowStats(poolEntry, startTime);
+            // 通过代理工厂获取代理链接（使用Javassist字节码技术） 后面详细讲
+            return poolEntry.createProxyConnection(leakTaskFactory.schedule(poolEntry), now);
+         }
+      } while (timeout > 0L);
+      // 超过connectionTimeout时间未拿到链接，监控记录借出的超时记录并抛出超时异常
+      metricsTracker.recordBorrowTimeoutStats(startTime);
+      throw createTimeoutException(startTime);
+   } catch (InterruptedException e) {
+      // 中断当前线程
+      Thread.currentThread().interrupt();
+      throw new SQLException(poolName + " - Interrupted during connection acquisition", e);
+   } finally {
+      // 释放锁
+      suspendResumeLock.release();
+   }
+}
+```
 ## ConcurrentBag
 
 ## ProxyFactory
