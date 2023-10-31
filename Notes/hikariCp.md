@@ -186,7 +186,28 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
          }
    }
 }
+// 包装Connection的实体
+final class PoolEntry implements IConcurrentBagEntry {
+   // 原子性的更新PoolEntry的状态
+   static {
+      stateUpdater = AtomicIntegerFieldUpdater.newUpdater(PoolEntry.class, "state");
+   }
+   // 构造器
+   PoolEntry(final Connection connection, final PoolBase pool, final boolean isReadOnly, final boolean isAutoCommit) {
+      // 链接
+      this.connection = connection;
+      // 链接池管理器，用于回调管理器的方法
+      this.hikariPool = (HikariPool) pool;
+      this.isReadOnly = isReadOnly;
+      this.isAutoCommit = isAutoCommit;
+      this.lastAccessed = currentTime();
+      // Statement的FastList容器
+      this.openStatements = new FastList<>(Statement.class, 16);
+   }
+}
 ```
+综上所示，HikariPool的核心功能（监控除外）大概布局见下图：
+![](/assets/image/HikariCp核心图.png)
 ## ProxyFactory
 
 ## 参考文档
