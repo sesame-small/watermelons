@@ -126,7 +126,7 @@ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBag
 ```java
 // hardTimeout 超时时间（取配置时间，默认为30秒）
 public Connection getConnection(final long hardTimeout) throws SQLException {
-   // 信号量锁，允许链接池挂起时才使用，正常情况未执行
+   // 信号量锁，允许链接池挂起时才使用，正常情况空执行，多次空执行的情况下，JIT会优化为不再执行，优化性能。
    suspendResumeLock.acquire();
    final long startTime = currentTime();
    try {
@@ -209,6 +209,67 @@ final class PoolEntry implements IConcurrentBagEntry {
 综上所示，HikariPool的核心功能（监控除外）大概布局见下图：
 ![](/assets/image/HikariCp核心图.png)
 ## ProxyFactory
+```java
+public final class ProxyFactory {
+   // 所有的方法体均有JavassistProxyFactory字节码代理工厂生成
+   static ProxyConnection getProxyConnection(final PoolEntry poolEntry, final Connection connection, final FastList<Statement> openStatements, final ProxyLeakTask leakTask, final boolean isReadOnly, final boolean isAutoCommit) {
+      // Body is replaced (injected) by JavassistProxyFactory
+      throw new IllegalStateException("You need to run the CLI build and you need target/classes in your classpath to run.");
+   }
+   static Statement getProxyStatement(final ProxyConnection connection, final Statement statement) {}
+   static CallableStatement getProxyCallableStatement(final ProxyConnection connection, final CallableStatement statement) {}
+   static PreparedStatement getProxyPreparedStatement(final ProxyConnection connection, final PreparedStatement statement) {}
+   static ResultSet getProxyResultSet(final ProxyConnection connection, final ProxyStatement statement, final ResultSet resultSet) {}
+   static DatabaseMetaData getProxyDatabaseMetaData(final ProxyConnection connection, final DatabaseMetaData metaData) {}
+}
+
+// 通过字节码生成之后的完整类 下面Hikari的Connection、Statement均由JavassistProxyFactory生成，然后委托给JDBC去执行具体的操作。
+public final class ProxyFactory {
+    static ProxyConnection getProxyConnection(PoolEntry var0, Connection var1, FastList<Statement> var2, ProxyLeakTask var3, boolean var4, boolean var5) {
+        return new HikariProxyConnection(var0, var1, var2, var3, var4, var5);
+    }
+    static Statement getProxyStatement(ProxyConnection var0, Statement var1) {
+        return new HikariProxyStatement(var0, var1);
+    }
+    static CallableStatement getProxyCallableStatement(ProxyConnection var0, CallableStatement var1) {
+        return new HikariProxyCallableStatement(var0, var1);
+    }
+    static PreparedStatement getProxyPreparedStatement(ProxyConnection var0, PreparedStatement var1) {
+        return new HikariProxyPreparedStatement(var0, var1);
+    }
+    static ResultSet getProxyResultSet(ProxyConnection var0, ProxyStatement var1, ResultSet var2) {
+        return new HikariProxyResultSet(var0, var1, var2);
+    }
+    static DatabaseMetaData getProxyDatabaseMetaData(ProxyConnection var0, DatabaseMetaData var1) {
+        return new HikariProxyDatabaseMetaData(var0, var1);
+    }
+}
+// 示例：所有的操作交由Connection的代理类ProxyConnection去执行,并重写部分逻辑加入hikari的api
+public final class HikariProxyConnection extends ProxyConnection implements Wrapper, AutoCloseable, Connection {
+    public Statement createStatement() throws SQLException {
+        try {
+            return super.createStatement();
+        } catch (SQLException var2) {
+            throw this.checkException(var2);
+        }
+    }
+    public PreparedStatement prepareStatement(String var1) throws SQLException {
+        try {
+            return super.prepareStatement(var1);
+        } catch (SQLException var3) {
+            throw this.checkException(var3);
+        }
+    }
+    public CallableStatement prepareCall(String var1) throws SQLException {
+        try {
+            return super.prepareCall(var1);
+        } catch (SQLException var3) {
+            throw this.checkException(var3);
+        }
+    }
+    ······
+}
+```
 
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
