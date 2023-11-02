@@ -275,6 +275,21 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 > HikariCP 包含许多微观优化，这些优化单独来看几乎无法衡量，但组合在一起可以提高整体性能。其中一些优化以毫秒为单位进行测量，并摊销到数百万次调用上, 从而由量变产生质变。
 
 - ### FastList
+  <div style="display: inline-block; width:50%;">
+  ```java
+   public final class FastList<T> implements List<T>, RandomAccess, Serializable {
+
+   }
+  ```
+  </div>
+
+  <div style="display: inline-block; width:50%;">
+  ```java
+   public final class FastList<T> implements List<T>, RandomAccess, Serializable {
+      
+   }
+  ```
+  </div>
 - ### ConCurrentBag
   - 无锁设计
   - ThreadLocal缓存
