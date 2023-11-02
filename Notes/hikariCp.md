@@ -271,6 +271,18 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 }
 ```
 
+## “光”的秘密
+> HikariCP 包含许多微观优化，这些优化单独来看几乎无法衡量，但组合在一起可以提高整体性能。其中一些优化以毫秒为单位进行测量，并摊销到数百万次调用上, 从而由量变产生质变。
+
+- ### FastList
+- ### ConCurrentBag
+  - 无锁设计
+  - ThreadLocal缓存
+  - 队列窃取
+  - hand-off队列
+- ### JIN
+- ### Javassist
+
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
 + 《Java并发编程实战》
