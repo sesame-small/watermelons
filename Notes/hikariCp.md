@@ -275,8 +275,12 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 > HikariCP 包含许多微观优化，这些优化单独来看几乎无法衡量，但组合在一起可以提高整体性能。其中一些优化以毫秒为单位进行测量，并摊销到数百万次调用上, 从而由量变产生质变。
 
 ### FastList
-![FastList Vs ArrayList](/assets/image/Fast&ArratList.png)
-
+![FastList Vs ArrayList](/assets/image/FastArrayList.png)
+##### FastList 与 ArrayList的区别：
+- FastList初始化固定大小的特性，相较于ArrayList去掉了范围检查（rangeCheck）、计算修改记录（modCount）的操作；
+- FastList基于Connection的特性，remove方法从后向前遍历（LIFO），减少了数组的复制步骤；
+- FastList扩容相对ArrayList较为简洁，减少入栈的操作，数组复制使用System的方法，比Arrays的复制方法更快；
+- 
 ### ConCurrentBag
 ##### 无锁设计
 ##### ThreadLocal缓存
