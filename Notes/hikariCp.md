@@ -274,29 +274,23 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 ## “光”的秘密
 > HikariCP 包含许多微观优化，这些优化单独来看几乎无法衡量，但组合在一起可以提高整体性能。其中一些优化以毫秒为单位进行测量，并摊销到数百万次调用上, 从而由量变产生质变。
 
-- ### FastList
-  <div style="display: inline-block; width:50%;">
-  ```java
-   public final class FastList<T> implements List<T>, RandomAccess, Serializable {
+### FastList
+<div>
+<div style="float:left;width:50%">
+  <image src = "assets/image/FastList.png)">
+</div>
+<div style="float:right;width:50%">
+   <image src = "../assets/image/ArrayList.png)">
+</div>
+</div>
 
-   }
-  ```
-  </div>
-
-  <div style="display: inline-block; width:50%;">
-  ```java
-   public final class FastList<T> implements List<T>, RandomAccess, Serializable {
-      
-   }
-  ```
-  </div>
-- ### ConCurrentBag
-  - 无锁设计
-  - ThreadLocal缓存
-  - 队列窃取
-  - hand-off队列
-- ### JIN
-- ### Javassist
+### ConCurrentBag
+##### 无锁设计
+##### ThreadLocal缓存
+##### 队列窃取
+##### hand-off队列
+### JIN
+### Javassist
 
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
