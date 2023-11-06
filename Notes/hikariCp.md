@@ -283,7 +283,9 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
   
 
 ### ConCurrentBag
-> 这是一个专门的并发包，在连接池中实现了比LinkedBlockingQueue和LinkedTransferQueue更好的性能。在可能的情况下，它使用ThreadLocal存储来避免锁，但是如果ThreadLocal列表中没有可用的项，它就会扫描一个公共集合。当借用线程没有自己的ThreadLocal列表时，ThreadLocal列表中未使用的项可以被“窃取”。它是一种“无锁”实现，使用专门的AbstractQueuedLongSynchronizer来管理跨线程信令。
+> 这是一个专门的并发包，在连接池中实现了比LinkedBlockingQueue和LinkedTransferQueue更好的性能。在可能的情况下，它使用ThreadLocal存储来避免锁，但是如果ThreadLocal列表中没有可用的项，它就会扫描一个公共集合。当借用线程没有自己的ThreadLocal列表时，ThreadLocal列表中未使用的项可以被“窃取”。它是一种“无锁”实现，使用专门的AbstractQueuedLongSynchronizer来管理跨线程信令。  
+
+
 - ##### 无锁设计
 - ##### ThreadLocal缓存
 - ##### 队列窃取
@@ -325,6 +327,8 @@ public T borrow(long timeout, final TimeUnit timeUnit) throws InterruptedExcepti
       }
    }
 ```
+
+
 ### JIN
 ### Javassist
 
