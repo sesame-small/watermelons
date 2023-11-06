@@ -279,13 +279,52 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 ##### FastList 与 ArrayList的区别：
 - FastList初始化固定大小的特性，相较于ArrayList去掉了范围检查（rangeCheck）、计算修改记录（modCount）的操作；
 - FastList基于Connection的特性，remove方法从后向前遍历（LIFO），减少了数组的复制步骤；
-- FastList扩容相对ArrayList较为简洁，减少入栈的操作，数组复制使用System的方法，比Arrays的复制方法更快；
-- 
+- FastList扩容相对ArrayList较为简洁，减少入栈的操作，数组复制使用System的方法，比Arrays的复制方法操作更少。
+  
+
 ### ConCurrentBag
-##### 无锁设计
-##### ThreadLocal缓存
-##### 队列窃取
-##### hand-off队列
+> 这是一个专门的并发包，在连接池中实现了比LinkedBlockingQueue和LinkedTransferQueue更好的性能。在可能的情况下，它使用ThreadLocal存储来避免锁，但是如果ThreadLocal列表中没有可用的项，它就会扫描一个公共集合。当借用线程没有自己的ThreadLocal列表时，ThreadLocal列表中未使用的项可以被“窃取”。它是一种“无锁”实现，使用专门的AbstractQueuedLongSynchronizer来管理跨线程信令。
+- ##### 无锁设计
+- ##### ThreadLocal缓存
+- ##### 队列窃取
+- ##### hand-off队列
+```java
+public T borrow(long timeout, final TimeUnit timeUnit) throws InterruptedException {
+   // 优先从threadLocal里获取，线程级缓存
+   final var list = threadList.get();
+   for (int i = list.size() - 1; i >= 0; i--) {
+      final var entry = list.remove(i);
+      final T bagEntry = weakThreadLocals ? ((WeakReference<T>) entry).get() :(T) entry;
+      if (bagEntry != null && bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
+         return bagEntry;
+      }
+   }
+   final int waiting = waiters.incrementAndGet();
+   try {
+      for (T bagEntry : sharedList) {
+         if (bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
+            if (waiting > 1) {
+               listener.addBagItem(waiting - 1);
+            }
+            return bagEntry;
+         }
+      }
+      listener.addBagItem(waiting);
+      timeout = timeUnit.toNanos(timeout);
+      do {
+         final var start = currentTime();
+         final T bagEntry = handoffQueue.poll(timeout, NANOSECONDS);
+         if (bagEntry == null || bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
+            return bagEntry;
+         }
+         timeout -= elapsedNanos(start);
+      } while (timeout > 10_000);
+         return null;
+      } finally {
+         waiters.decrementAndGet();
+      }
+   }
+```
 ### JIN
 ### Javassist
 
