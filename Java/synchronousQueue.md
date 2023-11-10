@@ -17,6 +17,7 @@ permalink: java/syncQueue
 ![syncQueue](/assets/image/syncQueue.png)
 ```java
 public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQueue<E>, Serializable {
+    // 构造器 参数判断是否公平策略
     public SynchronousQueue() { this(false); }
     public SynchronousQueue(boolean fair) { transferer = fair ? new TransferQueue<E>() : new TransferStack<E>();}
     abstract static class Transferer<E> {
