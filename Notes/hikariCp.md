@@ -395,7 +395,7 @@ public boolean remove(final T bagEntry) {
 ### [Javassist](https://github.com/brettwooldridge/HikariCP/wiki/Down-the-Rabbit-Hole){:target="_blank"}
 > HikariCP 使用 Java 字节码修改类库 Javassist 来生成委托实现动态代理。动态代理的实现在 ProxyFactory 类。Javassist 生成动态代理，是因为其速度更快，相比于 JDK Proxy 生成的字节码更少，精简了很多不必要的字节码。
   
-HikariCP 还对项目进行了 JIT 优化。比如说 JIT 方法内联优化默认的字节码个数阈值为 35 字节，低于 35 字节才会进行优化。而 HikariCP 对自己的字节码进行研究，精简了部分方法的字节码，使用了诸如减少了类继承层次结构等方式，将关键部分限制在 35 字节以内，有利于 JIT 进行优化。
+HikariCP 进行了 JIT 优化。比如说 JIT 方法内联优化默认的字节码个数阈值为 35 字节，低于 35 字节才会进行优化。而 HikariCP 对自己的字节码进行研究，精简了部分方法的字节码，使用了诸如减少了类继承层次结构等方式，将关键部分限制在 35 字节以内，有利于 JIT 进行优化。
 
 例如：HikariCP 对 invokevirtual 和 invokestatic 两种字节码中函数调用指令的优化。
 
@@ -447,6 +447,12 @@ private final java.sql.PreparedStatement prepareStatement(java.lang.String, java
 
 这样修改后不再需要 getstatic 指令，并且使用了 invokestatic 代替 invokevirtual 指令，前者 invokestatic 更容易被JIT优化。另外从堆栈的角度来说，堆栈大小也从原来的 5 变成了 4，方法字节码数量也更少了。
 
+## 总结
+> HikariCP基于自身的业务特性，从数据结构、并发控制、JIT字节码编译、状态机等多方面去优化数据库链接池，从而提升了整个链接池的并发性能。从这130kb的代码中我们可以学到许多java多线程编程的相关知识点及功能设计，相关代码大家可以自行下载参阅。
+
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
++ [github/javassist](https://github.com/jboss-javassist/javassist){:target="_blank"}
++ [oracle/HotSpot VM](https://www.oracle.com/java/technologies/whitepaper.html){:target="_blank"}
++ [A primer on JIT compilation in Java HotSpot VM](https://www.oracle.com/technical-resources/articles/java/architect-evans-pt1.html){:target="_blank"}
 + 《Java并发编程实战》
