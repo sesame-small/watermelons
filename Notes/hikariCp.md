@@ -392,9 +392,60 @@ public boolean remove(final T bagEntry) {
 }
 ```
 
+### [Javassist](https://github.com/brettwooldridge/HikariCP/wiki/Down-the-Rabbit-Hole){:target="_blank"}
+> HikariCP 使用 Java 字节码修改类库 Javassist 来生成委托实现动态代理。动态代理的实现在 ProxyFactory 类。Javassist 生成动态代理，是因为其速度更快，相比于 JDK Proxy 生成的字节码更少，精简了很多不必要的字节码。
+  
+HikariCP 还对项目进行了 JIT 优化。比如说 JIT 方法内联优化默认的字节码个数阈值为 35 字节，低于 35 字节才会进行优化。而 HikariCP 对自己的字节码进行研究，精简了部分方法的字节码，使用了诸如减少了类继承层次结构等方式，将关键部分限制在 35 字节以内，有利于 JIT 进行优化。
 
-### JIN
-### Javassist
+例如：HikariCP 对 invokevirtual 和 invokestatic 两种字节码中函数调用指令的优化。
+
+HikariCP 的早期版本使用单例工厂实例来生成 Connection、Statement 和 ResultSet 的代理。该单例工厂实例以全局静态变量 (PROXY_FACTORY) 的形式存在。
+``` java
+public final PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
+    return PROXY_FACTORY.getProxyPreparedStatement(this, delegate.prepareStatement(sql, columnNames));
+}
+```
+```java
+public final java.sql.PreparedStatement prepareStatement(java.lang.String, java.lang.String[]) throws java.sql.SQLException;
+    flags: ACC_PRIVATE, ACC_FINAL
+    Code:
+      stack=5, locals=3, args_size=3
+         0: getstatic     #59    // 获取静态变量 PROXY_FACTORY，放入操作数栈
+         3: aload_0           // 本地变量0中加载值，放入操作数栈，也就是 this
+         4: aload_0           // 本地变量0中加载值，放入操作数栈，也就是 this
+         5: getfield      #3  // 获取成员变量 delegate 放入操作数栈，使用操作栈中的 this
+         8: aload_1          //  将本地变量1放入操作数栈，也就是 sql 变量
+         9: aload_2          //  将本地变量1放入操作数栈，也就是 columnNames 变量
+        10: invokeinterface #74,  3     // 调用 prepareStatement 方法
+        15: invokevirtual #69              // 调用 getProxyPreparedStatement 方法
+        18: return
+```
+通过上边字节码发现，首先要调用 getstatic 指令获取静态对象，然后再调用 invokevirtual 指令执行getProxyPreparedStatement 方法。
+
+HikariCP 后续对此进行了优化，直接使用静态方法调用，如下所示。getProxyPreparedStatement 方法是 ProxyFactory 静态方法。
+```java
+public final PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
+   return ProxyFactory.getProxyPreparedStatement(this, delegate.prepareStatement(sql, columnNames));
+}
+```  
+
+这些修改后，字节码如下所示。  
+```java
+private final java.sql.PreparedStatement prepareStatement(java.lang.String, java.lang.String[]) throws java.sql.SQLException;
+    flags: ACC_PRIVATE, ACC_FINAL
+    Code:
+      stack=4, locals=3, args_size=3
+         0: aload_0              
+         1: aload_0
+         2: getfield      #3   // 获取 delegate 变量
+         5: aload_1
+         6: aload_2
+         7: invokeinterface #72,  3    // 调用 prepareStatement 方法
+        12: invokestatic  #67            // 调用 getProxyPreparedStatement 静态方法
+        15: areturn
+```  
+
+这样修改后不再需要 getstatic 指令，并且使用了 invokestatic 代替 invokevirtual 指令，前者 invokestatic 更容易被JIT优化。另外从堆栈的角度来说，堆栈大小也从原来的 5 变成了 4，方法字节码数量也更少了。
 
 ## 参考文档
 + [github/HikariCp](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
