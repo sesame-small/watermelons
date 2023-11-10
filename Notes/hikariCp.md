@@ -176,12 +176,12 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
          this.handoffQueue = new SynchronousQueue<>(true);
          // 阻塞的请求数
          this.waiters = new AtomicInteger();
-         // 共享的链接集合，采用CopyOnWriteArrayList实现读的安全无锁操作。
+         // 共享的链接集合（存储所有的链接实例），采用CopyOnWriteArrayList实现读的安全无锁操作。
          this.sharedList = new CopyOnWriteArrayList<>();
          if (weakThreadLocals) {
             this.threadList = ThreadLocal.withInitial(() -> new ArrayList<>(16));
          } else {
-            // 用于线程缓存的集合，优先从ThreadLocal中获取可用链接，从而减少不同线程之间的竞争
+            // 用于线程缓存的集合，优先从ThreadLocal中获取可用链接的引用，从而减少不同线程之间的竞争
             this.threadList = ThreadLocal.withInitial(() -> new FastList<>(IConcurrentBagEntry.class, 16));
          }
    }
@@ -189,6 +189,8 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
 // 包装Connection的实体
 final class PoolEntry implements IConcurrentBagEntry {
    // 原子性的更新PoolEntry的状态
+   private static final AtomicIntegerFieldUpdater<PoolEntry> stateUpdater;
+   private volatile int state = 0;
    static {
       stateUpdater = AtomicIntegerFieldUpdater.newUpdater(PoolEntry.class, "state");
    }
@@ -291,41 +293,102 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 - ##### 队列窃取
 - ##### hand-off队列
 ```java
+/**
+ * 借出链接
+ */
 public T borrow(long timeout, final TimeUnit timeUnit) throws InterruptedException {
    // 优先从threadLocal里获取，线程级缓存
    final var list = threadList.get();
-   for (int i = list.size() - 1; i >= 0; i--) {
-      final var entry = list.remove(i);
+   // 从后向前遍历，可以更快的拿到刚使用完归还的链接，大概率还没有被别的线程使用
+   for (int i = list.size() - 1; i >= 0; i--) { 
+      final var entry = list.remove(i); // 从fastlist中移除该链接
       final T bagEntry = weakThreadLocals ? ((WeakReference<T>) entry).get() :(T) entry;
+      // 对bagEntry进行CAS状态替换，能替换成功则表示取到了链接，直接返回bagEntry
       if (bagEntry != null && bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
          return bagEntry;
       }
    }
+   // 从线程的缓存中没有取到数据，取当前等待的数量并加1
    final int waiting = waiters.incrementAndGet();
    try {
-      for (T bagEntry : sharedList) {
+      for (T bagEntry : sharedList) { // 遍历共享集合
+         // 进行CAS比较替换
          if (bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
-            if (waiting > 1) {
+            if (waiting > 1) { // 如果当前有等待的请求，则通过listener回调pool管理的添加链接的线程池添加链接
                listener.addBagItem(waiting - 1);
             }
-            return bagEntry;
+            return bagEntry; // 替换成功则返回
          }
       }
+      // 从共享集合里也没有取到链接的话，则调用添加链接的线程池
       listener.addBagItem(waiting);
-      timeout = timeUnit.toNanos(timeout);
-      do {
+      timeout = timeUnit.toNanos(timeout); // 获取超时时间
+      do { 
          final var start = currentTime();
+         // 在超时时间内循环等待从交换队列(handoffQueue)中获取其他线程归还的链接
          final T bagEntry = handoffQueue.poll(timeout, NANOSECONDS);
+         // CAS比较是否有其他线程已经使用，没有则返回
          if (bagEntry == null || bagEntry.compareAndSet(STATE_NOT_IN_USE, STATE_IN_USE)) {
             return bagEntry;
          }
          timeout -= elapsedNanos(start);
       } while (timeout > 10_000);
-         return null;
-      } finally {
-         waiters.decrementAndGet();
+      return null;
+   } finally {
+      waiters.decrementAndGet(); // 等待的请求数自增1
+   }
+}
+
+/**
+ * 归还链接
+ */ 
+public void requite(final T bagEntry) {
+   bagEntry.setState(STATE_NOT_IN_USE); // 设置poolEntry为未使用状态
+   for (var i = 0; waiters.get() > 0; i++) { // 如果有等待的资源
+      // 判断当前链接是否已经被其他线程借出 或者 已经刚好被交换队列交换借出，则直接返回
+      if (bagEntry.getState() != STATE_NOT_IN_USE || handoffQueue.offer(bagEntry)) {
+         return;
+      } else if ((i & 0xff) == 0xff) {  // 如果循环256仍然没有被借出，则睡10纳秒
+         parkNanos(MICROSECONDS.toNanos(10));
+      } else {
+         Thread.yield(); // 让出时间片给其他线程
       }
    }
+   final var threadLocalList = threadList.get(); //获取当前threadLocal里的链接数，小于50则添加该链接到当前threadLocal里
+   if (threadLocalList.size() < 50) {
+      threadLocalList.add(weakThreadLocals ? new WeakReference<>(bagEntry) : bagEntry);
+   }
+}
+
+/**
+ * 新增链接
+ */ 
+public void add(final T bagEntry) {
+   if (closed) { // 判断ConcurrentBag是否关闭
+      LOGGER.info("ConcurrentBag has been closed, ignoring add()");
+      throw new IllegalStateException("ConcurrentBag has been closed, ignoring add()");
+   }
+   sharedList.add(bagEntry); // 添加链接到共享集合里
+   // 当有等待资源的线程时，将资源交到某个等待线程后才返回（handoffQueue）
+   while (waiters.get() > 0 && bagEntry.getState() == STATE_NOT_IN_USE && !handoffQueue.offer(bagEntry)) {
+      Thread.yield();
+   }
+}
+
+/**
+ * 移除链接
+ */ 
+public boolean remove(final T bagEntry) {
+   // 如果资源正在被使用，无法切换状态，则返回失败
+   if (!bagEntry.compareAndSet(STATE_IN_USE, STATE_REMOVED) && !bagEntry.compareAndSet(STATE_RESERVED, STATE_REMOVED) && !closed) {
+      return false;
+   }
+   // 从共享集合中移除该资源
+   final boolean removed = sharedList.remove(bagEntry);
+   // 从threadLocal里移除该资源的引用
+   threadList.get().remove(bagEntry);
+   return removed;
+}
 ```
 
 
