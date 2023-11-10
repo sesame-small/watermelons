@@ -291,7 +291,7 @@ public final class HikariProxyConnection extends ProxyConnection implements Wrap
 - ##### 无锁设计
 - ##### ThreadLocal缓存
 - ##### 队列窃取
-- ##### hand-off队列
+- ##### [hand-off队列](/java/syncQueue)
       
 ```java
 /**
