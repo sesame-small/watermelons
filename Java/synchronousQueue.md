@@ -9,7 +9,8 @@ permalink: java/syncQueue
 # {{ page.title }}
 
 > 一个一对一资源交换的阻塞队列，队列里不会存储资源，一个线程从队列中poll/offer资源，必须等待另一个线程进行与之相反的操作。该队列支持对等待生产者和消费者线程进行排序的可选公平策略。默认情况下，此排序不保证。但是，使用公平设置为 true 的队列构造函数将按 FIFO 顺序授予线程访问权限。
----
+---  
+
 ## 代码结构
 ![syncQueue](/assets/image/syncQueue.png)
 ```java
