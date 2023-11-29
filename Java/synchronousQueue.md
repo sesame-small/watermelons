@@ -31,7 +31,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
     static final int maxUntimedSpins = maxTimedSpins * 16;
     // 自旋超时阈值
     static final long spinForTimeoutThreshold = 1000L;
-    // 非公平模式下的实现类转移栈
+    // 非公平模式下的实现类转移堆栈
     static final class TransferStack<E> extends Transferer<E> {...}
     // 公平模式下的实现类转移队列
     static final class TransferQueue<E> extends Transferer<E> {...}
@@ -48,8 +48,40 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
 > **SynchronousQueue**没有使用synchronized、reentrantlock等锁，通过**CAS**与**自旋**实现线程安全，并且直接对线程进行**阻塞（park）与唤醒**。
 
 ## 公平模式下的转移队列
-惯例上图：
+### 惯例上图：
 ![SyncQueue-transferQueue](/assets/image/SynchronousQueue-TransferQueue.png)
+### 代码示例：
+可以修改消费线程的sleep时长、生产线程offer的超时时间、消费线程poll的超时时间来观察转移队列一对一转移的效果。
+```java
+public class SynchronousQueueDemo {
+    private static final ThreadPoolExecutor PRODUCT_THREAD = new ThreadPoolExecutor(2,12,30,TimeUnit.SECONDS, new ArrayBlockingQueue<>(10000), new NamedThreadFactory("拍卖线程"));
+    private static final ThreadPoolExecutor CONSUMER_THREAD = new ThreadPoolExecutor(2,12,30,TimeUnit.SECONDS, new ArrayBlockingQueue<>(10000), new NamedThreadFactory("竞拍线程"));
+    private static final Integer SIZE = 5;
+    private static final String[] WP = {"《Java从入门到入院》", "《Python从入门到入院》", "《C++从入门到入院》", "《Go从入门到入院》", "《JS从入门到入院》", "《Php从入门到入院》"};
+    public static void main(String[] args) throws InterruptedException {
+        SynchronousQueue<String> synchronousQueue = new SynchronousQueue<>(true);
+        for (int i = 0 ; i < SIZE; i ++) {
+            int finalI = i;
+            PRODUCT_THREAD.execute(() -> {
+                try {
+                    System.out.println(Thread.currentThread().getName() + "：开始拍卖物品：" + WP[finalI] + ":" + synchronousQueue.offer(WP[finalI], 5, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                }
+            });
+        }
+        for (int i = 0 ; i < SIZE; i ++) {
+            CONSUMER_THREAD.execute(() -> {
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                    System.out.println(Thread.currentThread().getName() + "：竞拍到物品：" + synchronousQueue.poll(5, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                }
+            });
+        }
+    }
+}
+```
+### 源码解读
 ```java
 static final class TransferQueue<E> extends Transferer<E> {
     static final class QNode {} // 队列节点信息
