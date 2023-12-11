@@ -141,16 +141,11 @@ E transfer(E e, boolean timed, long nanos) {
             QNode m = h.next; // 获取头节点              
             if (t != tail || m == null || h != head) {continue;} // 头尾节点发生变化或者获取到的头结点尾空，则继续循环
             Object x = m.item; // 获取头节点的数据
-            /*
-				isData == (x != null)成立: 1.当前结点为生产者请求,isData = true,此时头结点为消费者请求,但已经取消了x != null
-												   2.当前结点为消费者请求,isData = false,此时头结点为生产者请求,但已经被匹配x == null
-												   
-						x == m:头结点已经取消	
-						
-						m.casItem(x, e):如果m为生产者请求 x == 生产的数据,当前消费者请求e == null,把生产者请求的item设置为null
-										如果m为消费者请求 x == null,当前生产者者请求e == 生产的数据,把消费者请求的item设置为生产的数据
-						
-			*/
+            // 1.当前结点为生产者请求,isData = true,此时头结点为消费者请求,但已经取消了x != null
+            // 2.当前结点为消费者请求,isData = false,此时头结点为生产者请求,但已经被匹配x == null
+            // x == m 头结点已经取消	
+            // 1.如果m为生产者请求 x == 生产的数据,当前消费者请求e == null,把生产者请求的item设置为null
+            // 2.如果m为消费者请求 x == null,当前生产者者请求e == 生产的数据,把消费者请求的item设置为生产的数据
             if (isData == (x != null) || x == m || !m.casItem(x, e)) {
                 advanceHead(h, m);
                 continue;
@@ -203,13 +198,67 @@ Object awaitFulfill(QNode s, E e, boolean timed, long nanos) {
 }
 ```
 
-## 非公平模式下的转移堆栈
+## 非公平模式下的转移栈
 ```java
 static final class TransferStack<E> extends Transferer<E> {
-    static final class SNode {}
-    volatile SNode head;
-    static final int REQUEST    = 0;
-    static final int DATA       = 1;
-    static final int FULFILLING = 2;
+    static final class SNode {} // 节点信息
+    volatile SNode head; // 头节点
+    static final int REQUEST    = 0; // 消费模式
+    static final int DATA       = 1; // 生产模式
+    static final int FULFILLING = 2; // 当前节点请求匹配中
+    static final class SNode {
+        volatile SNode next;        // 栈内的下个节点
+        volatile SNode match;       // 与当前节点匹配的节点
+        volatile Thread waiter;     // 当前等待的线程
+        Object item;                // 数据
+        int mode;                   // 当前结点的模式:DATA/REQUEST/FULFILLING
+    }
 }
 ```
+
+### 惯例上图：
+![SyncQueue-transferStack](/assets/image/SynchronousQueue-TransferStack.png)
+
+### 代码示例：
+```java
+public class SynchronousStackDemo {
+    private static final ThreadPoolExecutor PRODUCT_THREAD = new ThreadPoolExecutor(5,12,30,TimeUnit.SECONDS, new ArrayBlockingQueue<>(10000), new NamedThreadFactory("拍卖线程"));
+    private static final ThreadPoolExecutor CONSUMER_THREAD = new ThreadPoolExecutor(1,12,30,TimeUnit.SECONDS, new ArrayBlockingQueue<>(10000), new NamedThreadFactory("竞拍线程"));
+    private static final Integer SIZE = 5;
+    private static final String[] WP = {"《Java从入门到入院》", "《Python从入门到入院》", "《C++从入门到入院》", "《Go从入门到入院》", "《JS从入门到入院》", "《Php从入门到入院》"};
+
+    public static void main(String[] args) throws InterruptedException {
+        SynchronousQueue<String> synchronousQueue = new SynchronousQueue<>(false);
+        for (int i = 0 ; i < SIZE; i ++) {
+            int finalI = i;
+            PRODUCT_THREAD.execute(() -> {
+                try {
+                    System.out.println(Thread.currentThread().getName() + "：开始拍卖物品：" + WP[finalI]);
+                    synchronousQueue.offer(WP[finalI], 200, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                }
+            });
+        }
+        TimeUnit.SECONDS.sleep(10);
+        for (int i = 0 ; i < SIZE; i ++) {
+            CONSUMER_THREAD.execute(() -> {
+                try {
+                    System.out.println(Thread.currentThread().getName() + "：竞拍到物品：" + synchronousQueue.poll(500, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                }
+            });
+        }
+    }
+}
+```
+
+> 拍卖线程-5：开始拍卖物品：《JS从入门到入院》
+拍卖线程：开始拍卖物品：《Java从入门到入院》
+拍卖线程-4：开始拍卖物品：《Go从入门到入院》
+拍卖线程-3：开始拍卖物品：《C++从入门到入院》
+拍卖线程-2：开始拍卖物品：《Python从入门到入院》
+竞拍线程：竞拍到物品：《Python从入门到入院》
+竞拍线程：竞拍到物品：《C++从入门到入院》
+竞拍线程：竞拍到物品：《Go从入门到入院》
+竞拍线程：竞拍到物品：《Java从入门到入院》
+竞拍线程：竞拍到物品：《JS从入门到入院》
