@@ -264,8 +264,8 @@ E transfer(E e, boolean timed, long nanos) {
             // 设置了超时时间 并且已超时
             if (timed && nanos <= 0L) {
                 //    
-                if (h != null && h.isCancelled()) {
-                    casHead(h, h.next);     // pop cancelled node
+                if (h != null && h.isCancelled()) { // 判断header结点是否被取消 即h.match = h
+                    casHead(h, h.next);  // 设置header的下个节点为heade节点
                 } else {
                     return null;
                 }
@@ -282,37 +282,42 @@ E transfer(E e, boolean timed, long nanos) {
                 }
                 return (E) ((mode == REQUEST) ? m.item : s.item); // 根据生产/消费模式返回不同的item数据
             }
-        } else if (!isFulfilling(h.mode)) { // try to fulfill
-            if (h.isCancelled()) {        // already cancelled
-                casHead(h, h.next);         // pop and retry
-            } else if (casHead(h, s = snode(s, e, h, FULFILLING | mode))) {
-                for (; ; ) { // loop until matched or waiters disappear
-                    SNode m = s.next;       // m is s's match
-                    if (m == null) {        // all waiters are gone
-                        casHead(s, null);   // pop fulfill node
-                        s = null;           // use new node next time
-                        break;              // restart main loop
+        // 栈头等待其他线程做不同模式的操作 h.mode != FULFILLING
+        } else if (!isFulfilling(h.mode)) { 
+            if (h.isCancelled()) { // 判断header结点是否被取消 即h.match = h 
+                casHead(h, h.next); // 设置header的下个节点为heade节点
+            } else if (casHead(h, s = snode(s, e, h, FULFILLING | mode))) { // 尝试CAS把包装e的s节点替换为头节点, 并标记为FULFILLING，失败则继续循环
+                for (; ; ) {
+                    // 此处的m为上面snode复制的栈头
+                    SNode m = s.next;
+                    if (m == null) { // 如果栈头为空，说明其他线程抢走了，重新设置header
+                        casHead(s, null);
+                        s = null; 
+                        break; 
                     }
+                    // 得到与m匹配的节点
                     SNode mn = m.next;
+                    // 尝试去匹配，匹配成功会唤醒等待的线程
                     if (m.tryMatch(s)) {
-                        casHead(s, mn);     // pop both s and m
-                        return (E) ((mode == REQUEST) ? m.item : s.item);
-                    } else {                  // lost match
+                        casHead(s, mn); // // 匹配成功，两个都弹出
+                        return (E) ((mode == REQUEST) ? m.item : s.item); // 根据生产/消费模式返回不同的
+                    } else {
                         s.casNext(m, mn);
-                    }   // help unlink
+                    } 
                 }
             }
-        } else {                            // help a fulfiller
-            SNode m = h.next;               // m is h's match
-            if (m == null) {                 // waiter is gone
-                casHead(h, null);           // pop fulfilling node
+        // 表示有其他线程在进行配对(m & FULFILLING) != 0, 进行匹配，执行出栈操作
+        } else { 
+            SNode m = h.next; 
+            if (m == null) { 
+                casHead(h, null); 
             } else {
                 SNode mn = m.next;
-                if (m.tryMatch(h)) {        // help match
-                    casHead(h, mn);         // pop both h and m
-                } else {                      // lost match
+                if (m.tryMatch(h)) { 
+                    casHead(h, mn); 
+                } else { 
                     h.casNext(m, mn); 
-                }      // help unlink
+                } 
             }
         }
     }
@@ -362,3 +367,27 @@ SNode awaitFulfill(SNode s, boolean timed, long nanos) {
     }
 }
 ```
+
+## 总结
+- **零缓冲**：
+  - SynchronousQueue没有内部容量来存储元素，这意味着它的内存占用非常小。
+  - 由于不存在缓存，因此不需要进行数据复制或移动，这使得SynchronousQueue具有较高的效率。
+- **无锁竞争**：
+  - 在多线程环境下，大多数队列需要使用某种形式的锁机制来保证线程安全。
+  - 而SynchronousQueue使用了自旋锁和CAS（Compare-and-Swap）操作等非阻塞同步技术，避免了传统的锁竞争开销。
+- **高效的线程协作**：
+  - 当一个生产者线程尝试添加一个元素到队列时，如果此时没有等待的消费者线程，则该线程会阻塞并等待消费者线程出现。
+  - 同样，当一个消费者线程尝试从队列中获取一个元素时，如果没有可用的元素且没有等待的生产者线程，则该线程也会阻塞并等待生产者线程提供元素。
+  - 这种机制使得线程间的交互非常高效，消除了不必要的上下文切换。
+- **低延迟**：
+  - 因为SynchronousQueue的设计使得生产和消费几乎同时发生，所以它具有非常低的延迟。
+  - 对于那些需要高吞吐量和低延迟的应用程序来说，SynchronousQueue是一个很好的选择。
+- **可扩展性**：
+  - 尽管SynchronousQueue本身是无界的，但是它可以用于构建有界的线程池。
+  - 当线程池达到最大容量时，新的任务会被拒绝，而不是阻塞在队列中，这有助于防止资源耗尽和过度消耗CPU时间。
+- **自适应优化**：
+  - SynchronousQueue可以根据当前的工作负载动态调整其行为。
+  - 当工作负载较高时，SynchronousQueue可以更频繁地执行自旋，以减少上下文切换和锁争用。
+## 应用
+- [HikariCP](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
+- NewCachedThreadPool
