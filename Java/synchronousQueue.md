@@ -299,7 +299,7 @@ E transfer(E e, boolean timed, long nanos) {
                     SNode mn = m.next;
                     // 尝试去匹配，匹配成功会唤醒等待的线程
                     if (m.tryMatch(s)) {
-                        casHead(s, mn); // // 匹配成功，两个都弹出
+                        casHead(s, mn); // // 匹配成功，执行出栈操作
                         return (E) ((mode == REQUEST) ? m.item : s.item); // 根据生产/消费模式返回不同的
                     } else {
                         s.casNext(m, mn);
@@ -321,6 +321,18 @@ E transfer(E e, boolean timed, long nanos) {
             }
         }
     }
+}
+// 唤醒被阻塞的栈头m, 把当前节点s赋值给m的match属性, 这样栈头m被唤醒时，就能得到当前s的属性，即拿到s.item(e)
+boolean tryMatch(SNode s) {
+    if (match == null && SMATCH.compareAndSet(this, null, s)) {
+        Thread w = waiter;
+        if (w != null) {    // waiters need at most one unpark
+            waiter = null;
+            LockSupport.unpark(w);
+        }
+        return true;
+    }
+    return match == s;
 }
 ```
 
