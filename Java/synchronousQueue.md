@@ -387,7 +387,9 @@ SNode awaitFulfill(SNode s, boolean timed, long nanos) {
   - 当线程池达到最大容量时，新的任务会被拒绝，而不是阻塞在队列中，这有助于防止资源耗尽和过度消耗CPU时间。
 - **自适应优化**：
   - SynchronousQueue可以根据当前的工作负载动态调整其行为。
-  - 当工作负载较高时，SynchronousQueue可以更频繁地执行自旋，以减少上下文切换和锁争用。
+  - 当工作负载较高时，SynchronousQueue可以更频繁地执行自旋，以减少上下文切换和锁争用。  
+
+
 ## 应用
 - [HikariCP](https://github.com/brettwooldridge/HikariCP){:target="_blank"}
 - NewCachedThreadPool
