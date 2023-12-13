@@ -217,7 +217,7 @@ static final class TransferStack<E> extends Transferer<E> {
 ```
 
 ### 惯例上图：
-![SyncQueue-transferStack](/assets/image/SynchronousQueue-TransferStack.png)
+![SyncQueue-transferStack](/assets/image/SyncQueue-Stack.png)
 
 ### 代码示例：
 ```java
@@ -252,13 +252,113 @@ public class SynchronousStackDemo {
 }
 ```
 
-> 拍卖线程-5：开始拍卖物品：《JS从入门到入院》
-> 拍卖线程：开始拍卖物品：《Java从入门到入院》
-> 拍卖线程-4：开始拍卖物品：《Go从入门到入院》
-> 拍卖线程-3：开始拍卖物品：《C++从入门到入院》
-> 拍卖线程-2：开始拍卖物品：《Python从入门到入院》
-> 竞拍线程：竞拍到物品：《Python从入门到入院》
-> 竞拍线程：竞拍到物品：《C++从入门到入院》
-> 竞拍线程：竞拍到物品：《Go从入门到入院》
-> 竞拍线程：竞拍到物品：《Java从入门到入院》
-> 竞拍线程：竞拍到物品：《JS从入门到入院》
+### 源码解读
+```java
+E transfer(E e, boolean timed, long nanos) {
+    SNode s = null; 
+    int mode = (e == null) ? REQUEST : DATA; // 生产或者消费模式
+    for (; ; ) { // 循环
+        SNode h = head; // 获取头节点
+        // 如果头为空或者请求线程与头结点的请求模式一致
+        if (h == null || h.mode == mode) {
+            // 设置了超时时间 并且已超时
+            if (timed && nanos <= 0L) {
+                //    
+                if (h != null && h.isCancelled()) {
+                    casHead(h, h.next);     // pop cancelled node
+                } else {
+                    return null;
+                }
+            } else if (casHead(h, s = snode(s, e, h, mode))) { // 尝试CAS把包装e的s节点替换为头节点, 失败则继续循环
+                // 自旋/阻塞，直到节点s匹配到响应的数据或超时
+                SNode m = awaitFulfill(s, timed, nanos);
+                if (m == s) { // 超时          
+                    clean(s); // 对s进行出栈操作，并返回null，结束
+                    return null;
+                }
+                // 如果匹配到响应的数据，则把头节点的下个节点设置为头节点
+                if ((h = head) != null && h.next == s) {
+                    casHead(h, s.next);  
+                }
+                return (E) ((mode == REQUEST) ? m.item : s.item); // 根据生产/消费模式返回不同的item数据
+            }
+        } else if (!isFulfilling(h.mode)) { // try to fulfill
+            if (h.isCancelled()) {        // already cancelled
+                casHead(h, h.next);         // pop and retry
+            } else if (casHead(h, s = snode(s, e, h, FULFILLING | mode))) {
+                for (; ; ) { // loop until matched or waiters disappear
+                    SNode m = s.next;       // m is s's match
+                    if (m == null) {        // all waiters are gone
+                        casHead(s, null);   // pop fulfill node
+                        s = null;           // use new node next time
+                        break;              // restart main loop
+                    }
+                    SNode mn = m.next;
+                    if (m.tryMatch(s)) {
+                        casHead(s, mn);     // pop both s and m
+                        return (E) ((mode == REQUEST) ? m.item : s.item);
+                    } else {                  // lost match
+                        s.casNext(m, mn);
+                    }   // help unlink
+                }
+            }
+        } else {                            // help a fulfiller
+            SNode m = h.next;               // m is h's match
+            if (m == null) {                 // waiter is gone
+                casHead(h, null);           // pop fulfilling node
+            } else {
+                SNode mn = m.next;
+                if (m.tryMatch(h)) {        // help match
+                    casHead(h, mn);         // pop both h and m
+                } else {                      // lost match
+                    h.casNext(m, mn); 
+                }      // help unlink
+            }
+        }
+    }
+}
+```
+
+```java
+/**
+ * 自旋/阻塞，直到节点s通过执行操作匹配。
+ * @param s 等待的节点
+ * @param timed true if timed wait
+ * @param nanos 超时时间
+ * @return 匹配的节点, 或者是 s 如果被取消
+ */
+SNode awaitFulfill(SNode s, boolean timed, long nanos) {
+    // 截止时间
+    final long deadline = timed ? System.nanoTime() + nanos : 0L;
+    Thread w = Thread.currentThread();
+    // 获取自旋次数
+    int spins = (shouldSpin(s) ? (timed ? maxTimedSpins : maxUntimedSpins) : 0);
+    for (;;) {
+        if (w.isInterrupted()) {
+            s.tryCancel(); // 当前线程被打断，设置s节点的match节点为自己
+        }
+        SNode m = s.match; // 获取s的匹配节点，未设置，默认为null（超时时s.match = s）
+        // 如果不为null，则存在匹配的节点，直接返回匹配的节点信息
+        if (m != null) { 
+            return m;
+        }
+        if (timed) { // 如果设置了超时时间并且超时，则设置s节点的match节点为自己并继续循环
+            nanos = deadline - System.nanoTime();
+            if (nanos <= 0L) {
+                s.tryCancel();
+                continue;
+            }
+        }
+        // // 自旋次数，继续自旋
+        if (spins > 0)
+            spins = shouldSpin(s) ? (spins-1) : 0;
+        // 把当前线程设置成 waiter，主要是通过线程来完成阻塞和唤醒
+        else if (s.waiter == null)
+            s.waiter = w; // 没有自旋次数，如果s节点的等待线程尾null，则设置s节点的等待线程为当前线程
+        else if (!timed)
+            LockSupport.park(this); // 挂起当前线程
+        else if (nanos > spinForTimeoutThreshold)
+            LockSupport.parkNanos(this, nanos); // 根据指定时间挂起当前线程
+    }
+}
+```
