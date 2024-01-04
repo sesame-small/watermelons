@@ -18,5 +18,5 @@ Blog Homepage for Navigating to Each Article.**
 ## 源码分析  
 主要分析一些比较有意思的框架源码，从中学习框架的设计及原理。
 + [Hikaricp源码分析](/note/hikaricp) (更新于2023-11-10)  
-+ [Guava EventBus源码分析](/note/eventBus) (更新待定)  
++ [Guava EventBus & Spring Event](/note/event) (更新待定)  
 
