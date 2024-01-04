@@ -1,5 +1,5 @@
 ---
-title: Virtual Thread
+title: 虚拟线程(Virtual Thread)
 layout: page
 nav_order: 1
 parent: Java

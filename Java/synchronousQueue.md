@@ -1,5 +1,5 @@
 ---
-title: SynchronousQueue
+title: 同步队列(SynchronousQueue)
 layout: page
 nav_order: 3
 parent: Java
