@@ -20,3 +20,6 @@ Blog Homepage for Navigating to Each Article.**
 + [Hikaricp源码分析](/note/hikaricp) (更新于2023-11-10)  
 + [Guava EventBus & Spring Event](/note/event) (更新待定)  
 
+## 技术应用
+主要关注项目中的一些组件的集成并实际应用。
++ [Spring集成ShardingSphere](/middleware/shardingSphere) (更新于2024-06-20)  
