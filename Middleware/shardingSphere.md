@@ -2,8 +2,8 @@
 title: ShardingSphere
 layout: page
 nav_order: 1
-parent: Java
-permalink: java/shardingSphere
+parent: Middleware
+permalink: middleware/shardingSphere
 ---
 
 # {{ page.title }}  
